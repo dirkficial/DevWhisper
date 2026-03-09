@@ -1,0 +1,6 @@
+CodeReviewNavigator_BattlePlan.md
+.env
+*.pcm
+__pycache__/
+node_modules/
+.DS_Store
