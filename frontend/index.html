@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevWhisper</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+  <header class="app-header">
+    <h1>DevWhisper</h1>
+    <p>Your AI pair programmer — watching and listening in real-time.</p>
+  </header>
+
+  <main class="app-main">
+    <section class="controls">
+      <button id="startBtn" class="btn btn-start">Start Session</button>
+      <button id="stopBtn"  class="btn btn-stop" disabled>Stop</button>
+
+      <div class="status-badge">
+        <span class="status-dot" id="statusDot"></span>
+        <span class="status-text" id="statusText">Idle</span>
+      </div>
+    </section>
+
+    <section class="log-panel">
+      <div class="log-header">Session Log</div>
+      <div class="log-body" id="log" role="log" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <!--
+    Hidden video element that receives the getDisplayMedia stream.
+    The ScreenCapture class draws from this into an offscreen canvas.
+  -->
+  <video id="screenVideo" autoplay muted playsinline hidden></video>
+
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

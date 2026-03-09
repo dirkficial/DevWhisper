@@ -1,0 +1,182 @@
+/* ─── Reset & Base ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:           #0d1117;
+  --surface:      #161b22;
+  --border:       #30363d;
+  --text:         #e6edf3;
+  --text-muted:   #8b949e;
+  --text-dim:     #484f58;
+
+  --green:        #3fb950;
+  --yellow:       #d29922;
+  --red:          #f85149;
+  --blue:         #79c0ff;
+
+  --btn-start:    #238636;
+  --btn-start-hv: #2ea043;
+  --btn-stop:     #b62324;
+  --btn-stop-hv:  #d1242f;
+
+  --radius:       8px;
+  --radius-pill:  20px;
+  --font-mono:    "SF Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 20px;
+}
+
+/* ─── Header ────────────────────────────────────────────────────────────────── */
+
+.app-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.app-header p {
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-size: 0.95rem;
+}
+
+/* ─── Main Layout ───────────────────────────────────────────────────────────── */
+
+.app-main {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ─── Controls ──────────────────────────────────────────────────────────────── */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ─── Buttons ───────────────────────────────────────────────────────────────── */
+
+.btn {
+  padding: 10px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-start { background: var(--btn-start); color: #fff; }
+.btn-start:not(:disabled):hover { background: var(--btn-start-hv); }
+
+.btn-stop  { background: var(--btn-stop);  color: #fff; }
+.btn-stop:not(:disabled):hover  { background: var(--btn-stop-hv);  }
+
+/* ─── Status Badge ──────────────────────────────────────────────────────────── */
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+  transition: background 0.3s;
+}
+
+/* Status states — set via data-status attribute on <body> or toggled by JS */
+.status-dot[data-status="idle"]       { background: var(--text-dim); }
+.status-dot[data-status="connecting"] { background: var(--yellow);   animation: pulse 1s ease-in-out infinite; }
+.status-dot[data-status="streaming"]  { background: var(--green);    animation: pulse 1.5s ease-in-out infinite; }
+.status-dot[data-status="stopped"]    { background: var(--text-muted); }
+.status-dot[data-status="error"]      { background: var(--red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* ─── Log Panel ─────────────────────────────────────────────────────────────── */
+
+.log-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.log-header {
+  padding: 10px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+}
+
+.log-body {
+  height: 360px;
+  overflow-y: auto;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.75;
+}
+
+/* ─── Log Entries ───────────────────────────────────────────────────────────── */
+
+.log-entry {
+  display: flex;
+  gap: 12px;
+}
+
+.log-ts  { color: var(--text-dim); flex-shrink: 0; }
+.log-msg { color: var(--text); }
+
+.log-entry.info .log-msg  { color: var(--blue); }
+.log-entry.ok   .log-msg  { color: var(--green); }
+.log-entry.warn .log-msg  { color: var(--yellow); }
+.log-entry.err  .log-msg  { color: var(--red); }
