@@ -21,7 +21,6 @@ import websockets
 
 PORT = 8000
 
-# 100 ms of silence at 24 kHz, 16-bit, mono = 2400 samples × 2 bytes
 SILENT_CHUNK = bytes(4800)
 
 
@@ -44,8 +43,8 @@ async def audio_handler(websocket):
 
 
 async def handler(websocket):
-    # websocket.path is available across websockets library versions
-    path = websocket.path
+    # websockets >= 14: path moved to websocket.request.path
+    path = websocket.request.path
     print(f"[server] Client connected → {path}")
 
     if path == "/ws/video":
