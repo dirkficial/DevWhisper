@@ -14,6 +14,19 @@
   </header>
 
   <main class="app-main">
+    <section class="mode-selector" id="modeSelector">
+      <label class="mode-option">
+        <input type="radio" name="mode" value="proactive" checked />
+        <span class="mode-label">Proactive</span>
+        <span class="mode-desc">WhisperDev speaks up when it notices something</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="reactive" />
+        <span class="mode-label">Reactive</span>
+        <span class="mode-desc">WhisperDev only responds when you speak to it</span>
+      </label>
+    </section>
+
     <section class="controls">
       <button id="startBtn" class="btn btn-start">Start Session</button>
       <button id="stopBtn"  class="btn btn-stop" disabled>Stop</button>

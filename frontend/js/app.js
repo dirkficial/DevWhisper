@@ -12,10 +12,11 @@ import { AudioPlayer }      from "./AudioPlayer.js";
 import { startBtn, stopBtn, log, setStatus } from "./ui.js";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-// Change these to point at the real FastAPI backend on Day 3.
-const WS_BASE  = "ws://localhost:8000";
-const VIDEO_URL = `${WS_BASE}/ws/video`;
-const AUDIO_URL = `${WS_BASE}/ws/audio`;
+// Derives the WebSocket base from the current page origin so the same code
+// works locally (ws://localhost:8000) and on Cloud Run (wss://...).
+const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
+
+const modeSelector = document.getElementById("modeSelector");
 
 // ─── Module-level instances ───────────────────────────────────────────────────
 // Instantiated fresh on each Start so resources are clean.
@@ -27,8 +28,15 @@ let audioPlayer     = null;
 // ─── Start ────────────────────────────────────────────────────────────────────
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
+  modeSelector.classList.add("disabled");
   setStatus("connecting");
   log("Starting session…", "info");
+
+  // Read the selected mode and build URLs with the query param
+  const mode = document.querySelector("input[name='mode']:checked").value;
+  const videoUrl = `${WS_BASE}/ws/video?mode=${mode}`;
+  const audioUrl = `${WS_BASE}/ws/audio?mode=${mode}`;
+  log(`Mode: ${mode}`, "info");
 
   try {
     // 1. AudioPlayer must exist before AgentConnection so onAudio never fires on null
@@ -36,8 +44,8 @@ startBtn.addEventListener("click", async () => {
 
     // 2. Connect WebSockets — fail fast if the server is down
     agentConnection = new AgentConnection({
-      videoUrl: VIDEO_URL,
-      audioUrl: AUDIO_URL,
+      videoUrl,
+      audioUrl,
       onAudio:  (int16Array) => audioPlayer.play(int16Array),
       onClose:  () => { log("Server closed the connection.", "warn"); stopSession(); },
       onError:  (msg) => log(msg, "err"),
@@ -100,4 +108,5 @@ function stopSession() {
   setStatus("stopped");
   stopBtn.disabled  = true;
   startBtn.disabled = false;
+  modeSelector.classList.remove("disabled");
 }
