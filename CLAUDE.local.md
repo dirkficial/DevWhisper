@@ -1,0 +1,2 @@
+# Local Preferences for WhisperDev
+

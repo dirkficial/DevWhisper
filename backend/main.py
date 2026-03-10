@@ -121,12 +121,16 @@ async def audio_ws(
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
         system_instruction=system_instruction,
-        voice_config=types.VoiceConfig(
-            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
+            )
         ),
     )
 
+    print(f"[audio] New session — mode={mode}", flush=True)
     async with client.aio.live.connect(model=MODEL_ID, config=config) as session:
+        print("[audio] Gemini session open", flush=True)
         tasks = [
             asyncio.create_task(_forward_mic(websocket, session)),
             asyncio.create_task(_forward_video(session)),
@@ -137,6 +141,7 @@ async def audio_ws(
         for t in pending:
             t.cancel()
         await asyncio.gather(*pending, return_exceptions=True)
+    print("[audio] Gemini session closed", flush=True)
 
 
 # ── Pipeline tasks ─────────────────────────────────────────────────────────────
@@ -150,31 +155,45 @@ async def _forward_mic(websocket: WebSocket, session) -> None:
             )
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        print(f"[mic] ERROR: {e}", flush=True)
+        raise
 
 
 async def _forward_video(session) -> None:
     """Video frame queue → Gemini image input (one JPEG at a time)."""
-    while True:
-        frame = await _video_queue.get()
-        await session.send_realtime_input(
-            video=types.Blob(data=frame, mime_type="image/jpeg")
-        )
+    try:
+        while True:
+            frame = await _video_queue.get()
+            await session.send_realtime_input(
+                video=types.Blob(data=frame, mime_type="image/jpeg")
+            )
+    except Exception as e:
+        print(f"[video] ERROR: {e}", flush=True)
+        raise
 
 
 async def _relay_audio(websocket: WebSocket, session) -> None:
     """Gemini 24 kHz PCM → browser.
 
-    Does NOT break on turn_complete — the session stays open for the full
-    duration of the developer's work session (multiple turns expected).
+    session.receive() ends after each turn_complete, so we loop and restart it
+    to keep the session alive across multiple conversation turns.
     """
     try:
-        async for message in session.receive():
-            if message.server_content and message.server_content.model_turn:
-                for part in message.server_content.model_turn.parts:
-                    if part.inline_data:
-                        await websocket.send_bytes(part.inline_data.data)
+        while True:
+            async for message in session.receive():
+                if message.server_content and message.server_content.model_turn:
+                    for part in message.server_content.model_turn.parts:
+                        if part.inline_data:
+                            await websocket.send_bytes(part.inline_data.data)
+                if message.server_content and message.server_content.turn_complete:
+                    print("[relay] turn complete — waiting for next turn", flush=True)
+                    break  # restart session.receive() for the next turn
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        print(f"[relay] ERROR: {e}", flush=True)
+        raise
 
 
 # ── Static files (must be last — catches all paths not matched above) ──────────
