@@ -9,14 +9,12 @@ import { ScreenCapture }    from "./ScreenCapture.js";
 import { MicCapture }       from "./MicCapture.js";
 import { AgentConnection }  from "./AgentConnection.js";
 import { AudioPlayer }      from "./AudioPlayer.js";
-import { startBtn, stopBtn, log, setStatus } from "./ui.js";
+import { startBtn, stopBtn, log, setStatus, startTimer, stopTimer } from "./ui.js";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 // Derives the WebSocket base from the current page origin so the same code
 // works locally (ws://localhost:8000) and on Cloud Run (wss://...).
 const WS_BASE = `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
-
-const modeSelector = document.getElementById("modeSelector");
 
 // ─── Module-level instances ───────────────────────────────────────────────────
 // Instantiated fresh on each Start so resources are clean.
@@ -28,15 +26,11 @@ let audioPlayer     = null;
 // ─── Start ────────────────────────────────────────────────────────────────────
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
-  modeSelector.classList.add("disabled");
   setStatus("connecting");
   log("Starting session…", "info");
 
-  // Read the selected mode and build URLs with the query param
-  const mode = document.querySelector("input[name='mode']:checked").value;
-  const videoUrl = `${WS_BASE}/ws/video?mode=${mode}`;
-  const audioUrl = `${WS_BASE}/ws/audio?mode=${mode}`;
-  log(`Mode: ${mode}`, "info");
+  const videoUrl = `${WS_BASE}/ws/video`;
+  const audioUrl = `${WS_BASE}/ws/audio`;
 
   try {
     // 1. AudioPlayer must exist before AgentConnection so onAudio never fires on null
@@ -47,6 +41,14 @@ startBtn.addEventListener("click", async () => {
       videoUrl,
       audioUrl,
       onAudio:  (int16Array) => audioPlayer.play(int16Array),
+      onControl: (msg) => {
+        if (msg.type === "interrupted") {
+          audioPlayer?.interrupt();
+          log("Agent interrupted — audio cleared.", "warn");
+        } else if (msg.type === "turn_complete") {
+          log("Agent finished speaking.", "info");
+        }
+      },
       onClose:  () => { log("Server closed the connection.", "warn"); stopSession(); },
       onError:  (msg) => log(msg, "err"),
     });
@@ -54,10 +56,13 @@ startBtn.addEventListener("click", async () => {
     await agentConnection.connect();
     log("Connected to server.", "ok");
 
+    // Guard: server may have closed the connection while we were awaiting connect()
+    if (!agentConnection) return;
+
     // 3. Start screen capture
     screenCapture = new ScreenCapture({
       onFrame: (blob) => {
-        agentConnection.sendFrame(blob);
+        agentConnection?.sendFrame(blob);
         log(`Frame sent — ${(blob.size / 1024).toFixed(1)} KB`);
       },
       onStop: () => {
@@ -66,19 +71,21 @@ startBtn.addEventListener("click", async () => {
       },
     });
     await screenCapture.start();
+    if (!agentConnection) { stopSession(); return; }
     log("Screen capture started.", "ok");
 
     // 4. Start mic capture
     micCapture = new MicCapture({
       onChunk: (int16Array) => {
-        agentConnection.sendAudio(int16Array);
+        agentConnection?.sendAudio(int16Array);
       },
     });
     await micCapture.start();
     log("Microphone capture started.", "ok");
 
     setStatus("streaming");
-    stopBtn.disabled = false;
+    startTimer();
+    stopBtn.disabled  = false;
 
   } catch (err) {
     log(`Failed to start: ${err.message}`, "err");
@@ -105,8 +112,8 @@ function stopSession() {
   agentConnection = null;
   audioPlayer     = null;
 
+  stopTimer();
   setStatus("stopped");
   stopBtn.disabled  = true;
   startBtn.disabled = false;
-  modeSelector.classList.remove("disabled");
 }

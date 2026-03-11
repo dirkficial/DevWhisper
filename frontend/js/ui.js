@@ -5,11 +5,35 @@
  * stay framework-agnostic and easy to migrate to React later.
  */
 
-export const startBtn  = document.getElementById("startBtn");
-export const stopBtn   = document.getElementById("stopBtn");
-export const statusDot = document.getElementById("statusDot");
-export const statusText = document.getElementById("statusText");
-export const logEl     = document.getElementById("log");
+export const startBtn    = document.getElementById("startBtn");
+export const stopBtn     = document.getElementById("stopBtn");
+export const statusDot   = document.getElementById("statusDot");
+export const statusText  = document.getElementById("statusText");
+export const logEl       = document.getElementById("log");
+
+const timerEl      = document.getElementById("sessionTimer");
+const timerDisplay = document.getElementById("timerDisplay");
+let _timerStart    = null;
+let _timerInterval = null;
+
+export function startTimer() {
+  _timerStart = Date.now();
+  timerEl.hidden = false;
+  _timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - _timerStart) / 1000);
+    const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
+    const s = (elapsed % 60).toString().padStart(2, "0");
+    timerDisplay.textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+export function stopTimer() {
+  clearInterval(_timerInterval);
+  _timerInterval = null;
+  _timerStart    = null;
+  timerDisplay.textContent = "00:00";
+  timerEl.hidden = true;
+}
 
 const STATUS_LABELS = {
   idle:       "Idle",

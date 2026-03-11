@@ -149,6 +149,21 @@ body {
 .btn-stop  { background: var(--btn-stop);  color: #fff; }
 .btn-stop:not(:disabled):hover  { background: var(--btn-stop-hv);  }
 
+/* ─── Session Timer ─────────────────────────────────────────────────────────── */
+
+.session-timer {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
 /* ─── Status Badge ──────────────────────────────────────────────────────────── */
 
 .status-badge {
