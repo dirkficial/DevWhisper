@@ -19,6 +19,7 @@ let _timerInterval = null;
 export function startTimer() {
   _timerStart = Date.now();
   timerEl.hidden = false;
+  timerEl.classList.add("active");
   _timerInterval = setInterval(() => {
     const elapsed = Math.floor((Date.now() - _timerStart) / 1000);
     const m = Math.floor(elapsed / 60).toString().padStart(2, "0");
@@ -32,6 +33,7 @@ export function stopTimer() {
   _timerInterval = null;
   _timerStart    = null;
   timerDisplay.textContent = "00:00";
+  timerEl.classList.remove("active");
   timerEl.hidden = true;
 }
 

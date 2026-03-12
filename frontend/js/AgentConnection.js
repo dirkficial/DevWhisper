@@ -15,19 +15,21 @@
 export class AgentConnection {
   /**
    * @param {{
-   *   videoUrl: string,
-   *   audioUrl: string,
-   *   onAudio:  (samples: Int16Array) => void,
-   *   onClose:  () => void,
-   *   onError:  (msg: string) => void,
+   *   videoUrl:  string,
+   *   audioUrl:  string,
+   *   onAudio:   (samples: Int16Array) => void,
+   *   onControl: (msg: object) => void,
+   *   onClose:   () => void,
+   *   onError:   (msg: string) => void,
    * }} options
    */
-  constructor({ videoUrl, audioUrl, onAudio, onClose, onError }) {
-    this._videoUrl = videoUrl;
-    this._audioUrl = audioUrl;
-    this._onAudio  = onAudio;
-    this._onClose  = onClose;
-    this._onError  = onError;
+  constructor({ videoUrl, audioUrl, onAudio, onControl = () => {}, onClose, onError }) {
+    this._videoUrl  = videoUrl;
+    this._audioUrl  = audioUrl;
+    this._onAudio   = onAudio;
+    this._onControl = onControl;
+    this._onClose   = onClose;
+    this._onError   = onError;
 
     this._videoSocket     = null;
     this._audioSocket     = null;
@@ -76,9 +78,16 @@ export class AgentConnection {
       ws.onopen = () => resolve();
 
       ws.onmessage = (event) => {
-        if (type === "audio" && event.data instanceof ArrayBuffer) {
-          // Convert raw 24 kHz int16 PCM from the server into Int16Array
+        if (type !== "audio") return;
+
+        if (event.data instanceof ArrayBuffer) {
           this._onAudio(new Int16Array(event.data));
+        } else if (typeof event.data === "string") {
+          try {
+            this._onControl(JSON.parse(event.data));
+          } catch {
+            // Malformed JSON — ignore silently to avoid silencing the handler
+          }
         }
       };
 

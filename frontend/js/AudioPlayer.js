@@ -51,6 +51,15 @@ export class AudioPlayer {
     this._nextPlayTime = startAt + buffer.duration;
   }
 
+  /** Immediately cancels all scheduled audio buffers (e.g. on agent interruption). */
+  interrupt() {
+    if (this._ctx) {
+      this._ctx.close();  // immediately halts all scheduled AudioBufferSourceNodes
+      this._ctx = null;
+      this._nextPlayTime = 0;
+    }
+  }
+
   /** Stops playback and closes the AudioContext. */
   stop() {
     if (this._ctx) {

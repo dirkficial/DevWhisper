@@ -19,6 +19,9 @@ import asyncio
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()  # loads backend/.env if it exists; no-op if missing
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.staticfiles import StaticFiles
 from google import genai
@@ -32,39 +35,56 @@ PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 LOCATION   = "us-central1"
 MODEL_ID   = "gemini-live-2.5-flash-native-audio"
 
-# ── System prompts ─────────────────────────────────────────────────────────────
+# ── System prompt ──────────────────────────────────────────────────────────────
 
-_SHARED_PERSONA = """
-You are WhisperDev, an expert AI pair programmer embedded in a developer's workflow.
-You can see their entire screen in real time and hear them as they work.
+SYSTEM_PROMPT = """
+ROLE:
+You are WhisperDev, a senior software engineer with 15+ years of experience
+pair-programming with a student or self-taught developer. You can see their screen
+in real-time and hear them speak. You respond with your voice. Your goal is to be
+the mentor they don't have — patient, encouraging, and honest.
 
-Your personality: Direct, knowledgeable, and encouraging — like a senior engineer
-sitting beside the developer. Keep all responses to 1–3 sentences. You are speaking
-aloud, not writing documentation. Never read out code verbatim — describe changes
-in plain language instead.
+BEHAVIOR RULES:
+1. WATCH ACTIVELY — Speak up when you notice something worth addressing. Don't
+   interrupt every few seconds — batch minor observations and speak at natural
+   pauses (when the user stops typing). Never stay silent on bugs.
+
+2. BE SOCRATIC FIRST — Ask a question before giving the answer. "I notice you're
+   using a nested loop here — what's the time complexity of this approach?" Give
+   the direct answer only if the user asks or is clearly stuck.
+
+3. PRIORITIZE BY SEVERITY:
+   - Bugs/errors → speak up immediately
+   - Algorithmic inefficiency → mention at the next natural pause
+   - Code style/readability → batch and mention during a break or when asked
+   - Good work → occasionally note it. Encouragement matters for learners.
+
+4. MATCH THE USER'S LEVEL — This is likely a beginner or self-taught developer.
+   Meet them where they are. Don't assume knowledge of advanced patterns. Build
+   up to concepts step by step. Never make them feel dumb for not knowing something.
+
+5. CONTEXT AWARENESS — Pay attention to:
+   - Which file is open and what language/framework it is
+   - The file/folder structure visible in the sidebar
+   - Terminal output and error messages
+   - What the user was working on earlier in the session
+
+6. KEEP RESPONSES CONCISE — This is voice output. Keep most responses to 1–3
+   sentences. Go deeper only when explaining a concept the user asked about.
+
+7. NEVER DICTATE CODE — Don't read out full code blocks. Describe the approach
+   instead: "Try extracting that into a helper function that takes the list and
+   returns the filtered result."
+
+KNOWLEDGE DOMAINS:
+- Data structures and algorithms (Big O, trade-offs, common patterns)
+- Language-specific idioms (Python, JavaScript, Java, C++, and others)
+- Common bugs and anti-patterns
+- Design patterns and SOLID principles
+- Testing strategies
+- Git workflows (if terminal is visible)
+- Framework-specific guidance (React, Django, Flask, etc.)
 """.strip()
-
-SYSTEM_PROMPTS = {
-    "proactive": _SHARED_PERSONA + """
-
-Proactive mode: Speak up without being asked when you notice:
-- Bugs or logic errors → always mention immediately
-- Security vulnerabilities → always mention immediately
-- Performance problems worth addressing now
-- A moment where the developer seems stuck or confused
-
-Stay silent during routine typing. Speak at natural pauses, not every few seconds.
-Ask a Socratic question first when the developer appears to be in the middle of
-figuring something out. Give a direct answer when they are clearly stuck.
-""".strip(),
-
-    "reactive": _SHARED_PERSONA + """
-
-Reactive mode: Stay completely silent until the developer speaks to you directly.
-When they do, respond concisely. Reference what you can see on the screen when
-relevant. Do not volunteer observations or commentary unprompted.
-""".strip(),
-}
 
 # ── Shared state (single-session MVP) ─────────────────────────────────────────
 #
@@ -82,10 +102,7 @@ app = FastAPI(title="DevWhisper")
 # ── WebSocket: /ws/video ───────────────────────────────────────────────────────
 
 @app.websocket("/ws/video")
-async def video_ws(
-    websocket: WebSocket,
-    mode: str = Query("proactive"),  # accepted but unused here; audio owns the session
-):
+async def video_ws(websocket: WebSocket):
     await websocket.accept()
     try:
         async for data in websocket.iter_bytes():
@@ -104,31 +121,32 @@ async def video_ws(
 # ── WebSocket: /ws/audio ───────────────────────────────────────────────────────
 
 @app.websocket("/ws/audio")
-async def audio_ws(
-    websocket: WebSocket,
-    mode: str = Query("proactive"),
-):
+async def audio_ws(websocket: WebSocket):
     await websocket.accept()
 
     if not PROJECT_ID:
+        print("[audio] ERROR: GOOGLE_CLOUD_PROJECT env var not set — closing connection", flush=True)
         await websocket.close(code=4000, reason="GOOGLE_CLOUD_PROJECT env var not set")
         return
 
     client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
 
-    system_instruction = SYSTEM_PROMPTS.get(mode, SYSTEM_PROMPTS["proactive"])
-
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
-        system_instruction=system_instruction,
+        system_instruction=SYSTEM_PROMPT,
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
             )
         ),
+        realtime_input_config=types.RealtimeInputConfig(
+            automatic_activity_detection=types.AutomaticActivityDetection(
+                silence_duration_ms=500,
+            )
+        ),
     )
 
-    print(f"[audio] New session — mode={mode}", flush=True)
+    print("[audio] New session", flush=True)
     async with client.aio.live.connect(model=MODEL_ID, config=config) as session:
         print("[audio] Gemini session open", flush=True)
         tasks = [
@@ -176,19 +194,26 @@ async def _forward_video(session) -> None:
 async def _relay_audio(websocket: WebSocket, session) -> None:
     """Gemini 24 kHz PCM → browser.
 
-    session.receive() ends after each turn_complete, so we loop and restart it
-    to keep the session alive across multiple conversation turns.
+    Also sends JSON control frames (text) on the same WebSocket:
+      {"type": "interrupted"}   — model was interrupted; browser must flush audio queue
+      {"type": "turn_complete"} — model finished its turn
     """
     try:
         while True:
             async for message in session.receive():
+                if message.server_content and message.server_content.interrupted:
+                    print("[relay] interrupted — signalling browser", flush=True)
+                    await websocket.send_text('{"type":"interrupted"}')
+
                 if message.server_content and message.server_content.model_turn:
                     for part in message.server_content.model_turn.parts:
                         if part.inline_data:
                             await websocket.send_bytes(part.inline_data.data)
+
                 if message.server_content and message.server_content.turn_complete:
                     print("[relay] turn complete — waiting for next turn", flush=True)
-                    break  # restart session.receive() for the next turn
+                    await websocket.send_text('{"type":"turn_complete"}')
+                    break
     except WebSocketDisconnect:
         pass
     except Exception as e:

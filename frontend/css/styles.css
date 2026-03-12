@@ -164,6 +164,11 @@ body {
   letter-spacing: 0.05em;
 }
 
+.session-timer.active {
+  font-weight: 600;
+  color: var(--text)
+}
+
 /* ─── Status Badge ──────────────────────────────────────────────────────────── */
 
 .status-badge {
